@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PocketOwl - Analyser</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 transition-colors duration-300">
+  <div class="flex min-h-screen">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-gray-900 text-white p-6">
+      <h1 class="text-2xl font-bold mb-8">PocketOwl</h1>
+      <nav class="space-y-4">
+        <a href="/dashboard" class="block hover:text-green-400">Dashboard</a>
+        <a href="/analyser" class="block hover:text-green-400 font-semibold">Analyser</a>
+        <a href="/logout" class="block hover:text-green-400">Logout</a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-8">
+      <div class="flex justify-between items-center mb-6">
+        <h2 class="text-3xl font-bold">Expense Analyser</h2>
+      </div>
+
+      <!-- Analysis Form -->
+      <div class="bg-gray-200 dark:bg-gray-800 rounded-xl p-6 mb-6">
+        <h3 class="text-xl font-semibold mb-4">Analyze Your Expenses</h3>
+        
+        <div class="flex flex-wrap gap-4 mb-4">
+          <div class="flex-1 min-w-fit">
+            <label for="month" class="block mb-2">Month</label>
+            <select id="month" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600">
+              <option value="1">January</option>
+              <option value="2">February</option>
+              <option value="3">March</option>
+              <option value="4">April</option>
+              <option value="5">May</option>
+              <option value="6">June</option>
+              <option value="7">July</option>
+              <option value="8">August</option>
+              <option value="9">September</option>
+              <option value="10">October</option>
+              <option value="11">November</option>
+              <option value="12">December</option>
+            </select>
+          </div>
+        </div>
+        
+        <button onclick="analyzeExpenses()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">
+          Generate Analysis
+        </button>
+      </div>
+
+      <!-- Loading Indicator -->
+      <div id="loading" class="hidden">
+        <div class="flex justify-center my-8">
+          <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-green-500"></div>
+        </div>
+        <p class="text-center text-gray-500 dark:text-gray-400">Analyzing your expenses...</p>
+      </div>
+      
+      <!-- Analysis Results -->
+      <div id="analysis-results" class="hidden space-y-6">
+        <!-- Summary -->
+        <div class="bg-gray-200 dark:bg-gray-800 rounded-xl p-6">
+          <h3 class="text-xl font-semibold mb-3">Monthly Summary</h3>
+          <div id="summary-text" class="prose dark:prose-invert"></div>
+        </div>
+        
+        <!-- Charts -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Expenses by Category (Bar Chart) -->
+          <div class="bg-gray-200 dark:bg-gray-800 rounded-xl p-6">
+            <h3 class="text-lg font-semibold mb-3">Budget Limiter</h3>
+            <div class="h-60">
+              <img id="python-bar-chart" class="w-full h-full object-contain" src="" alt="Bar Chart">
+            </div>
+          </div>
+          
+          <!-- Expense Distribution (Pie Chart) -->
+          <div class="bg-gray-200 dark:bg-gray-800 rounded-xl p-6">
+            <h3 class="text-lg font-semibold mb-3">Expenses by Category</h3>
+            <div class="h-60">
+              <img id="python-pie-chart" class="w-full h-full object-contain" src="" alt="Pie Chart">
+            </div>
+          </div>
+        </div>
+        
+        <!-- Detailed Analysis -->
+        <div class="bg-gray-200 dark:bg-gray-800 rounded-xl p-6">
+          <h3 class="text-xl font-semibold mb-3">Insights & Recommendations</h3>
+          <div id="insights" class="prose dark:prose-invert"></div>
+        </div>
+      </div>
+      
+      <!-- No Data Message -->
+      <div id="no-data" class="hidden bg-gray-200 dark:bg-gray-800 rounded-xl p-6 text-center">
+        <svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <h3 class="text-xl font-semibold mb-2">No Data Available</h3>
+        <p class="text-gray-600 dark:text-gray-400">
+          <span id="error-message">There are no transactions for the selected period. Try a different month or add some transactions.</span>
+        </p>
+        <a href="/dashboard" class="inline-block mt-4 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">
+          Add Transactions
+        </a>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      const now = new Date();
+      document.getElementById('month').value = now.getMonth() + 1;
+    });
+    
+    function toggleTheme() {
+      document.body.classList.toggle('dark');
+      updateChartsTheme();
+    }
+    
+    function updateChartsTheme() {
+      const isDarkMode = document.body.classList.contains('dark');
+      const textColor = isDarkMode ? '#f3f4f6' : '#1f2937';
+    }
+
+    function analyzeExpenses() {
+      const month = document.getElementById('month').value;
+      
+      document.getElementById('loading').classList.remove('hidden');
+      document.getElementById('analysis-results').classList.add('hidden');
+      document.getElementById('no-data').classList.add('hidden');
+      
+      console.log("Analyzing expenses for month:", month);
+
+      fetch('/api/analyze', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ month: parseInt(month) })
+      })
+      .then(res => {
+        if (!res.ok) {
+          throw new Error(`Server responded with status: ${res.status}`);
+        }
+        return res.json();
+      })
+      .then(data => {
+        document.getElementById('loading').classList.add('hidden');
+        
+        console.log("Analysis data received:", data);
+
+        if (data.error) {
+          document.getElementById('error-message').textContent = data.error;
+          document.getElementById('no-data').classList.remove('hidden');
+          return;
+        }
+
+        const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                          'July', 'August', 'September', 'October', 'November', 'December'];
+        
+        const summary = data.summary;
+        document.getElementById('summary-text').innerHTML = `
+          <p>You spent a total of <strong>$${summary.total_spent}</strong> in ${monthNames[month - 1]}.</p>
+          <p>Your budget was <strong>$${summary.total_budget}</strong>, with <strong>$${summary.budget_remaining}</strong> remaining.</p>
+          <p>Budget utilization: <strong>${((summary.total_spent / summary.total_budget) * 100).toFixed(1)}%</strong></p>
+          <p>Number of transactions: <strong>${summary.num_transactions}</strong>.</p>
+          <p>Top category: <strong>${summary.top_category}</strong> ($${summary.top_category_spent}).</p>
+        `;
+
+        document.getElementById('insights').innerHTML = `
+          <ul>
+            <li>${data.recommendation}</li>
+            <li>${data.daily_plan}</li>
+          </ul>
+        `;
+        
+        // Display Python-generated charts
+        if (data.charts) {
+          // Make sure to set the src attribute with the full data URL
+          document.getElementById('python-pie-chart').src = data.charts.pie_chart;
+          document.getElementById('python-bar-chart').src = data.charts.bar_chart;
+        }
+        
+        document.getElementById('analysis-results').classList.remove('hidden');
+      })
+      .catch(err => {
+        console.error("Error:", err);
+        document.getElementById('loading').classList.add('hidden');
+        document.getElementById('error-message').textContent = 'An error occurred while analyzing your expenses. Please try again later.';
+        document.getElementById('no-data').classList.remove('hidden');
+      });
+    }
+  </script>
+</body>
+</html>

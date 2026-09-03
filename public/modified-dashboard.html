@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>PocketOwl - Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 transition-colors duration-300">
+  <div class="flex min-h-screen">
+    <!-- Sidebar -->
+    <aside class="w-64 bg-gray-900 text-white p-6">
+      <h1 class="text-2xl font-bold mb-8">PocketOwl</h1>
+      <nav class="space-y-4">
+        <a href="/dashboard" class="block hover:text-green-400 font-semibold">Dashboard</a>
+        <a href="/analyser" class="block hover:text-green-400">Analyser</a>
+      </nav>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 p-8">
+
+      <!-- Connection Status -->
+      <div id="connection-status" class="bg-yellow-100 dark:bg-yellow-800 p-3 rounded mb-4 text-yellow-800 dark:text-yellow-200 hidden">
+        Connecting to database...
+      </div>
+
+      <!-- Balance -->
+      <div class="bg-gray-200 dark:bg-gray-800 rounded-xl p-6 mb-6">
+        <p class="text-xl font-semibold">Current Balance</p>
+        <p class="text-3xl font-bold mt-2">₹ <span id="balance">0</span></p>
+      </div>
+
+      <!-- Income & Expense -->
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div class="bg-gray-200 dark:bg-gray-800 rounded-xl p-6">
+          <p class="text-lg font-semibold">Total Income</p>
+          <p class="text-xl font-bold mt-2">₹ <span id="income">0</span></p>
+        </div>
+        <div class="bg-gray-200 dark:bg-gray-800 rounded-xl p-6">
+          <p class="text-lg font-semibold">Total Expense</p>
+          <p class="text-xl font-bold mt-2">₹ <span id="expense">0</span></p>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <!-- Create new function for editing -->
+      <div class="flex gap-4 mb-6">
+        <button onclick="openModal('expense')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">+ Add Expense</button>
+        <button onclick="openModal('income')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">+ Add Income</button>
+      </div>
+
+      <!-- Filters -->
+      <div class="flex gap-4 mb-6">
+        <select id="categoryFilter" onchange="applyFilters()" class="p-2 rounded border dark:bg-gray-800 dark:border-gray-600">
+          <option value="">All Categories</option>
+        </select>
+        <input type="date" id="startDate" onchange="applyFilters()" class="p-2 rounded border dark:bg-gray-800 dark:border-gray-600 !hidden" />
+        <input type="date" id="endDate" onchange="applyFilters()" class="p-2 rounded border dark:bg-gray-800 dark:border-gray-600 !hidden" />
+      </div>
+
+      <!-- Dropdowns to change selected Month & Year -->
+      <div class="flex gap-4 mb-6">
+        <select id="dashboardMonth" class="p-2 rounded border dark:bg-gray-800 dark:border-gray-600" onchange="handlePeriodChange()"></select>
+        <select id="dashboardYear" class="p-2 rounded border dark:bg-gray-800 dark:border-gray-600" onchange="handlePeriodChange()"></select>
+      </div>
+
+
+      <!-- Recent Transactions -->
+      <h3 class="text-xl font-semibold mb-4">Recent Transactions</h3>
+      <ul id="transactions" class="space-y-2 text-sm"></ul>
+    </main>
+  </div>
+
+  <!-- MODAL -->
+  <!-- tf is a modal -->
+  <div id="modal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center hidden z-10">
+    <div class="bg-white dark:bg-gray-800 p-6 rounded-xl w-96">
+      <h2 id="modal-title" class="text-xl font-semibold mb-4"></h2>
+      
+      <!-- Gomma whose syntax bro -->
+      <input id="amount" type="number" placeholder="Enter amount" required class="w-full mb-3 p-2 border rounded dark:bg-gray-700 dark:border-gray-600"/>
+      
+      <!-- Only show for expenses - Category -->
+      <div id="expense-fields">
+        <select id="category" required class="w-full mb-3 p-2 border rounded dark:bg-gray-700 dark:border-gray-600">
+          <option value="" disabled selected>Select Category</option>
+          <option value="Food">Food</option>
+          <option value="Transport">Transport</option>
+          <option value="Groceries">Groceries</option>
+          <option value="Entertainment">Entertainment</option>
+          <option value="Shopping">Shopping</option>
+          <option value="Misc">Misc</option>
+        </select>
+        
+        <!-- Added Description Field -->
+        <textarea id="description" placeholder="Description" class="w-full mb-3 p-2 border rounded dark:bg-gray-700 dark:border-gray-600"></textarea>
+      </div>
+      
+      <input id="date" type="date" class="w-full mb-4 p-2 border rounded dark:bg-gray-700 dark:border-gray-600"/>
+      <div class="flex justify-end space-x-2">
+        <button onclick="closeModal()" class="bg-gray-300 dark:bg-gray-600 px-4 py-2 rounded">Cancel</button>
+        <button onclick="submitModal()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">Save</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+  <script>
+    // API URL - Update with your actual backend URL
+    const API_URL = '/api';
+    
+    let balance = 0, income = 0, expense = 0, modalType = '', editId = null;
+    let transactions = []; //Global array so that i have all current transactions!
+
+    const balanceEl = document.getElementById('balance');
+    const incomeEl = document.getElementById('income');
+    const expenseEl = document.getElementById('expense');
+    const transactionsEl = document.getElementById('transactions');
+    const modal = document.getElementById('modal');
+    const modalTitle = document.getElementById('modal-title');
+    const amountInput = document.getElementById('amount');
+    const categoryInput = document.getElementById('category');
+    const descriptionInput = document.getElementById('description');
+    const dateInput = document.getElementById('date');
+    const categoryFilter = document.getElementById('categoryFilter');
+    const startDateFilter = document.getElementById('startDate');
+    const endDateFilter = document.getElementById('endDate');
+    const expenseFields = document.getElementById('expense-fields');
+    const connectionStatus = document.getElementById('connection-status');
+
+    function toggleTheme() {
+      document.body.classList.toggle('dark');
+    }
+
+    function showConnectionStatus(message, isError = false) {
+      connectionStatus.textContent = message;
+      connectionStatus.classList.remove('hidden', 'bg-yellow-100', 'bg-red-100', 'bg-green-100', 'dark:bg-yellow-800', 'dark:bg-red-800', 'dark:bg-green-800', 'text-yellow-800', 'text-red-800', 'text-green-800', 'dark:text-yellow-200', 'dark:text-red-200', 'dark:text-green-200');
+      
+      if (isError) {
+        connectionStatus.classList.add('bg-red-100', 'dark:bg-red-800', 'text-red-800', 'dark:text-red-200');
+      } else if (message === 'Connected to database') {
+        connectionStatus.classList.add('bg-green-100', 'dark:bg-green-800', 'text-green-800', 'dark:text-green-200');
+        setTimeout(() => {
+          connectionStatus.classList.add('hidden');
+        }, 2000);
+      } else {
+        connectionStatus.classList.add('bg-yellow-100', 'dark:bg-yellow-800', 'text-yellow-800', 'dark:text-yellow-200');
+      }
+    }
+
+    function openModal(type, id = null) {
+      modalType = type;
+      editId = id !== null ? String(id) : null;
+      modal.classList.remove('hidden');
+      
+      // Show/hide expense fields based on transaction type
+      if (type === 'income') {
+        expenseFields.style.display = 'none';
+      } else {
+        expenseFields.style.display = 'block';
+      }
+      
+      if (id !== null) {
+        const txn = transactions.find(t => t.id == id);
+        if (txn) {
+          modalTitle.textContent = 'Edit Transaction';
+          amountInput.value = txn.amount;
+          dateInput.value = formatDateForInput(txn.date);
+          
+          if (txn.type === 'expense') {
+            categoryInput.value = txn.category || '';
+            descriptionInput.value = txn.description || '';
+          }
+          modalType = txn.type;
+        }
+      } else {
+        modalTitle.textContent = type === 'income' ? 'Add Income' : 'Add Expense';
+        amountInput.value = '';
+        categoryInput.value = '';
+        descriptionInput.value = '';
+        dateInput.value = '';
+        editId = null;
+      }
+    }
+
+    function formatDateForInput(dateString){
+      // Convert "2025-04-05" or "2025-04-05T00:00:00.000Z" format to "2025-04-05"
+      const date = new Date(dateString);
+      return date.toISOString().split('T')[0];
+    }
+
+    function closeModal(){
+      modal.classList.add('hidden');
+      editId = null;
+    }
+
+    async function submitModal(){
+      const amount = parseFloat(amountInput.value);
+      const date = dateInput.value;
+      
+      if(!amount || !date){
+        alert("Please enter valid amount and date.");
+        return;
+      }
+
+      const data = {
+        amount,
+        date,
+        type: modalType,
+      };
+
+      if(modalType === 'expense'){
+        data.category = categoryInput.value;
+        data.description = descriptionInput.value;
+      }
+
+      if (editId !== null) {
+        data.id = String(editId);
+      }
+      
+      //-----FOR EDIT MODE-----------
+      const url = editId != null ? `${API_URL}/editTransac` : `${API_URL}/transactions`;
+      const method = editId !== null ? 'PUT' : 'POST';
+
+      console.log("Sending editId:", editId, typeof editId);
+
+      try{
+        const response = await fetch(url, {
+          method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data),
+        });
+
+        if(response.ok){
+          console.log("Transaction" + (editId ? "updated" : "saved") + ".");
+          
+          //Debug only below---
+          const resData = await response.json(); //Contains the returned data from the inserted value broooooo
+          console.log(resData); 
+          //---Debug code ends---
+          
+          closeModal(); //Close the modal here bro fk.
+
+          //Call loadTransactions for updating UI -> BUT CAUSES A FULL RELOD OF WEBSITE!! :(
+          await loadTransactions();
+
+        }else{
+          console.error("Failed to save transaction");
+        }
+      }catch(error){
+        console.error("Error:", error);
+      }
+    }
+
+    async function deleteTransaction(id, type) {
+      if (!confirm('Are you sure you want to delete this transaction?')) {
+        return;
+      }
+      showConnectionStatus('Deleting transaction...');
+
+      try {
+        const response = await fetch(`${API_URL}/${type}s/${id}`, {
+          method: 'DELETE'
+        });
+
+        if (response.ok) {
+          console.log("Transaction deleted!");
+
+          const resData = await response.json(); //the holyy returned data from delete
+          console.log(resData);
+
+          await loadTransactions();
+          showConnectionStatus('Transaction deleted!');
+          setTimeout(() => connectionStatus.classList.add('hidden'), 1500);
+        } else {
+          throw new Error(`Error: ${response.statusText}`);
+        }
+
+      } catch (error) {
+        console.error('Error deleting transaction:', error);
+        showConnectionStatus(`Failed to delete: ${error.message}`, true);
+      }
+    }
+
+
+    function updateUI() {
+      incomeEl.textContent = income.toFixed(2);
+      expenseEl.textContent = expense.toFixed(2);
+      balanceEl.textContent = balance.toFixed(2);
+
+      applyFilters();
+      updateCategoryFilter();
+    }
+
+    // function updateTransactionsList(list) {
+    //   transactionsEl.innerHTML = list.map(t => {
+    //     const formattedDate = new Date(t.date).toLocaleDateString();
+    //     return `
+    //       <li class="bg-gray-200 dark:bg-gray-700 p-3 rounded flex justify-between items-center">
+    //         <div>
+    //           <p><strong>${t.type === 'income' ? '+' : '-'} ₹${t.amount}</strong> ${t.category ? `(${t.category})` : ''}</p>
+    //           ${t.description ? `<p class="text-sm text-gray-600 dark:text-gray-400">${t.description}</p>` : ''}
+    //           <p class="text-xs text-gray-600 dark:text-gray-400">${formattedDate}</p>
+    //         </div>
+    //         <div class="space-x-2">
+    //           <button onclick="openModal('${t.type}', ${t.id})" class="text-blue-500 text-sm">✏️</button>
+    //           <button onclick="deleteTransaction(${t.id}, '${t.type}')" class="text-red-500 text-sm">🗑️</button>
+    //         </div>
+    //       </li>
+    //     `;
+    //   }).join('');
+    // }
+
+    function editModal(type, id=null){
+      //Actually logic remains same
+      //But for better readability and debugging, I made this function bro
+      //Fk these modals bro
+      openModal(type, id);
+    }
+    
+    //Add the editModal() function for editing purposes!
+    function updateTransactionsList(list) {
+      const transactionsEl = document.getElementById("transactions");
+
+      transactionsEl.innerHTML = list.map(t => {
+        const rawDate = t.date ?? t.month;
+        const formattedDate = new Date(rawDate).toLocaleDateString();
+
+        const isIncome = t.type === 'income';
+        const sign = isIncome ? '+' : '-';
+
+        const rawAmount = t.amount ?? t.total_budget ?? 0;
+        const amount = `₹${rawAmount}`;
+
+        const category = t.category ? `(${t.category})` : '';
+        // const id = t.id || t.expenditure_id || t.budget_id || 'null';
+        const id = t.id;
+
+        return `
+          <li class="bg-gray-200 dark:bg-gray-700 p-3 rounded flex justify-between items-center">
+            <div>
+              <p><strong>${sign} ${amount}</strong> ${category}</p>
+              ${t.description ? `<p class="text-sm text-gray-600 dark:text-gray-400">${t.description}</p>` : ''}
+              <p class="text-xs text-gray-600 dark:text-gray-400">${formattedDate}</p>
+            </div>
+            <div class="space-x-2">
+              <button onclick="editModal('${t.type}', '${id}')" class="text-blue-500 text-sm">✏️</button>
+              <button onclick="deleteTransaction('${id}', '${t.type}')" class="text-red-500 text-sm">🗑️</button>
+            </div>
+          </li>
+        `;
+      }).join('');
+    }
+
+    //UPDATE
+    function updateCategoryFilter() {
+      const categories = [...new Set(transactions
+        .filter(t => t.category) // Only expenses have categories
+        .map(t => t.category))];
+      
+      categoryFilter.innerHTML = `<option value="">All Categories</option>`;
+      categories.forEach(cat => {
+        if (cat) {
+          const option = document.createElement('option');
+          option.value = cat;
+          option.textContent = cat;
+          categoryFilter.appendChild(option);
+        }
+      });
+    }
+
+    //Helper Function to perform the ALL CATEGORIES DROPDOWN MENU bossman!
+    function updateCategoryDropdown() {
+      const categoryFilter = document.getElementById('categoryFilter');
+      
+      //Something wrong but GPT gave me this syntax -> TY GPT!
+      const categories = [...new Set(transactions
+        .filter(t => t.type === 'expense' && t.category)
+        .map(t => t.category))];
+
+      //Clear existing (but keep "All Categories")
+      categoryFilter.innerHTML = `<option value="">All Categories</option>`;
+
+      categories.forEach(cat => {
+        const option = document.createElement('option');
+        option.value = cat;
+        option.textContent = cat;
+        categoryFilter.appendChild(option);
+      });
+    }
+
+
+    function applyFilters() {
+      let filtered = [...transactions];
+      const category = categoryFilter.value;
+      const start = startDateFilter.value;
+      const end = endDateFilter.value;
+
+      if (category) {
+        filtered = filtered.filter(t => t.category === category);
+      }
+      if (start) {
+        filtered = filtered.filter(t => formatDateForInput(t.date) >= start);
+      }
+      if (end) {
+        filtered = filtered.filter(t => formatDateForInput(t.date) <= end);
+      }
+
+      updateTransactionsList(filtered);
+    }
+
+    async function loadTransactions() {
+      showConnectionStatus('Loading transactions...');
+
+      const selectedMonth = parseInt(document.getElementById('dashboardMonth').value) + 1;
+      const selectedYear = parseInt(document.getElementById('dashboardYear').value);
+
+      try {
+        const response = await fetch(`${API_URL}/transactions?month=${selectedMonth}&year=${selectedYear}`);
+
+        if (!response.ok) {
+          throw new Error(`Error: ${response.statusText}`);
+        }
+
+        const resData = await response.json();
+        const trans = resData.data;
+
+        console.log("Transactions from DB:", trans);
+
+        //reset values my nigga?
+        income = 0;
+        expense = 0;
+        balance = 0;
+
+        //GOMMA IF THIS DOESNT WORK , I SWEAR TO GOD
+        console.log(trans);
+        
+        trans.forEach(t => {
+          const amt = parseFloat(t.amount || t.total_budget || 0);
+
+          //THIS LINE FIXES THE DATE SYNCING ISSUE WITH THE FRONTEND ---> INCOME KEPT DISAPPEARING WHEN TRYING TO EDIT!
+          t.date = new Date(t.date || t.month).toISOString().slice(0, 10);
+          
+          if (t.type === 'income') {
+            income += amt;
+            balance += amt;
+          } else if (t.type === 'expense') {
+            expense += amt;
+            balance -= amt;
+          }
+        });
+
+        transactions = trans;
+
+        updateCategoryDropdown();
+        updateUI();
+        updateTransactionsList(trans);
+        showConnectionStatus('Connected to database');
+        
+      } catch (error) {
+        console.error('Error loading transactions:', error);
+        showConnectionStatus(`Failed to load: ${error.message}`, true);
+      }
+    }
+
+
+
+    function populateMonthYearSelectors() {
+      const months = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
+      ];
+      const now = new Date();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+
+      const yearRange = Array.from({ length: currentYear - 2000 + 1 }, (_, i) => 2000 + i);
+
+      const monthDropdowns = [document.getElementById('modalMonth'), document.getElementById('dashboardMonth')];
+      const yearDropdowns = [document.getElementById('modalYear'), document.getElementById('dashboardYear')];
+
+      monthDropdowns.forEach(dropdown => {
+        dropdown.innerHTML = months.map((month, idx) =>
+          `<option value="${idx}" ${idx === currentMonth ? 'selected' : ''}>${month}</option>`).join('');
+      });
+
+      yearDropdowns.forEach(dropdown => {
+        dropdown.innerHTML = yearRange.map(year =>
+          `<option value="${year}" ${year === currentYear ? 'selected' : ''}>${year}</option>`).join('');
+      });
+    }
+
+    function confirmMonthYear() {
+      const selectedMonth = document.getElementById('modalMonth').value;
+      const selectedYear = document.getElementById('modalYear').value;
+
+      document.getElementById('dashboardMonth').value = selectedMonth;
+      document.getElementById('dashboardYear').value = selectedYear;
+
+      loadTransactions(); // Important!
+
+      document.getElementById('monthYearModal').classList.add('hidden');
+    }
+
+
+    function handlePeriodChange() {
+      loadTransactions(); // Re-fetch data when dropdown changes
+    }
+
+
+    // Trigger it on page load
+    window.addEventListener('DOMContentLoaded', () => {
+      populateMonthYearSelectors();
+      document.getElementById('monthYearModal').classList.remove('hidden'); // Show on login
+    });
+
+
+    // Initial load
+    document.addEventListener('DOMContentLoaded', () => {
+      loadTransactions();
+    });
+  </script>
+
+  <!-- Month & Year Selection Modal -->
+  <div id="monthYearModal" class="fixed inset-0 bg-black bg-opacity-40 flex items-center justify-center z-20">
+    <div class="bg-white dark:bg-gray-800 p-6 rounded-xl w-96">
+      <h2 class="text-xl font-semibold mb-4">Select Month and Year</h2>
+      <div class="mb-4">
+        <label for="modalMonth" class="block mb-1">Month</label>
+        <select id="modalMonth" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"></select>
+      </div>
+      <div class="mb-4">
+        <label for="modalYear" class="block mb-1">Year</label>
+        <select id="modalYear" class="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600"></select>
+      </div>
+      <div class="flex justify-end space-x-2">
+        <button onclick="confirmMonthYear()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">Confirm</button>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
